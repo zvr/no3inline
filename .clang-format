@@ -1,0 +1,7 @@
+BasedOnStyle: InheritParentConfig
+TypeNames: 
+  - POINT
+  - SEARCH_MODE
+  - size_t
+  - uintmax_t
+
