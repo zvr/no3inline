@@ -27,22 +27,50 @@ typedef enum { RANDOM_SEARCH, EXACT_SEARCH } SEARCH_MODE;
 
 static
 int
-can_place(const POINT *points, size_t count, POINT candidate)
+gcd(int a, int b)
 {
-    for (size_t i = 0; i < count; ++i) {
-	for (size_t j = i + 1; j < count; ++j) {
-	    int64_t ab_x = (int64_t) points[j].x - points[i].x;
-	    int64_t ab_y = (int64_t) points[j].y - points[i].y;
-	    int64_t ac_x = (int64_t) candidate.x - points[i].x;
-	    int64_t ac_y = (int64_t) candidate.y - points[i].y;
+    while (b != 0) {
+	int t = a % b;
+	a     = b;
+	b     = t;
+    }
+    return a;
+}
 
-	    if (ab_x * ac_y == ab_y * ac_x) {
-		return 0;
-	    }
+/*
+ * Add delta to blocked[] for every grid cell on each line through
+ * the new point p and one of the count already placed points.
+ */
+static
+void
+mark_lines(size_t      n,
+	   uint32_t   *blocked,
+	   const POINT *points,
+	   size_t      count,
+	   POINT       p,
+	   int         delta)
+{
+    int size = (int) n;
+    for (size_t i = 0; i < count; ++i) {
+	int dx = points[i].x - p.x;
+	int dy = points[i].y - p.y;
+	int g  = gcd(abs(dx), abs(dy));
+	dx /= g;
+	dy /= g;
+
+	int x = p.x;
+	int y = p.y;
+	while (x - dx >= 0 && x - dx < size && y - dy >= 0
+	       && y - dy < size) {
+	    x -= dx;
+	    y -= dy;
+	}
+	while (x >= 0 && x < size && y >= 0 && y < size) {
+	    blocked[(size_t) x * n + (size_t) y] += (uint32_t) delta;
+	    x += dx;
+	    y += dy;
 	}
     }
-
-    return 1;
 }
 
 static
@@ -64,6 +92,7 @@ randomized_search(size_t         n,
                   size_t         target,
                   size_t         attempts,
                   unsigned char *grid,
+                  uint32_t      *blocked,
                   POINT         *points)
 {
     size_t *order = malloc(grid_size * sizeof(*order));
@@ -87,6 +116,7 @@ randomized_search(size_t         n,
 	}
 
 	memset(grid, 0, grid_size);
+	memset(blocked, 0, grid_size * sizeof(*blocked));
 	size_t count = 0;
 
 	for (size_t i = 0; i < grid_size && count < target; ++i) {
@@ -96,7 +126,8 @@ randomized_search(size_t         n,
 		.y = (int) (cell % n),
 	    };
 
-	    if (can_place(points, count, candidate)) {
+	    if (blocked[cell] == 0) {
+		mark_lines(n, blocked, points, count, candidate, 1);
 		points[count++] = candidate;
 		grid[cell]      = 1;
 	    }
@@ -120,6 +151,7 @@ exact_search(size_t         n,
              size_t         start,
              size_t         count,
              unsigned char *grid,
+             uint32_t      *blocked,
              POINT         *points)
 {
     if (count == target) {
@@ -137,17 +169,24 @@ exact_search(size_t         n,
 	    .y = (int) (cell % n),
 	};
 
-	if (!can_place(points, count, candidate)) {
+	/* each row can hold at most 2 points, so all earlier rows need 2 */
+	if (count < 2 * (size_t) candidate.x) {
+	    break;
+	}
+
+	if (blocked[cell] != 0) {
 	    continue;
 	}
 
+	mark_lines(n, blocked, points, count, candidate, 1);
 	points[count] = candidate;
 	grid[cell]    = 1;
 	if (exact_search(n, grid_size, target, cell + 1, count + 1, grid,
-	                 points)) {
+			 blocked, points)) {
 	    return 1;
 	}
 	grid[cell] = 0;
+	mark_lines(n, blocked, points, count, candidate, -1);
     }
 
     return 0;
@@ -250,21 +289,24 @@ main(int argc, char **argv)
 	return EXIT_FAILURE;
     }
 
-    unsigned char *grid   = calloc(grid_size, sizeof(*grid));
-    POINT         *points = malloc(target * sizeof(*points));
-    if (grid == NULL || points == NULL) {
+    unsigned char *grid    = calloc(grid_size, sizeof(*grid));
+    uint32_t      *blocked = calloc(grid_size, sizeof(*blocked));
+    POINT         *points  = malloc(target * sizeof(*points));
+    if (grid == NULL || blocked == NULL || points == NULL) {
 	perror("memory allocation");
 	free(grid);
+	free(blocked);
 	free(points);
 	return EXIT_FAILURE;
     }
 
     int result;
     if (mode == EXACT_SEARCH) {
-	result = exact_search(n, grid_size, target, 0, 0, grid, points);
-    } else {
 	result =
-	    randomized_search(n, grid_size, target, attempts, grid, points);
+	    exact_search(n, grid_size, target, 0, 0, grid, blocked, points);
+    } else {
+	result = randomized_search(n, grid_size, target, attempts, grid,
+				   blocked, points);
     }
 
     if (result == 1) {
@@ -278,6 +320,7 @@ main(int argc, char **argv)
     }
 
     free(grid);
+    free(blocked);
     free(points);
     return result == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
