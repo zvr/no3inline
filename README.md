@@ -27,7 +27,7 @@ Run randomized greedy search (also the default):
 ```
 
 The randomized mode shuffles the grid and greedily adds points,
-retrying up to a number of times, 200 by default.
+retrying up to a number of times, 1000 by default.
 Use `--attempts COUNT` to set a different positive attempt limit.
 It prints a grid using `X` for a point and `.` for an empty cell.
 Because this is a heuristic, it may report failure

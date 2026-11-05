@@ -16,7 +16,7 @@
 #include <string.h>
 #include <time.h>
 
-#define DEFAULT_RANDOM_ATTEMPTS 200
+#define DEFAULT_RANDOM_ATTEMPTS 1000
 
 typedef struct {
     int x;
@@ -37,38 +37,33 @@ gcd(int a, int b)
     return a;
 }
 
-/*
- * Add delta to blocked[] for every grid cell on each line through
- * the new point p and one of the count already placed points.
- */
 static
 void
-mark_lines(size_t      n,
-	   uint32_t   *blocked,
-	   const POINT *points,
-	   size_t      count,
-	   POINT       p,
-	   int         delta)
+mark_lines(size_t       n,
+           uint32_t    *blocked,
+           const POINT *points,
+           size_t       count,
+           POINT        p,
+           int          delta)
 {
     int size = (int) n;
     for (size_t i = 0; i < count; ++i) {
-	int dx = points[i].x - p.x;
-	int dy = points[i].y - p.y;
-	int g  = gcd(abs(dx), abs(dy));
-	dx /= g;
-	dy /= g;
+	int dx  = points[i].x - p.x;
+	int dy  = points[i].y - p.y;
+	int g   = gcd(abs(dx), abs(dy));
+	dx     /= g;
+	dy     /= g;
 
 	int x = p.x;
 	int y = p.y;
-	while (x - dx >= 0 && x - dx < size && y - dy >= 0
-	       && y - dy < size) {
+	while (x - dx >= 0 && x - dx < size && y - dy >= 0 && y - dy < size) {
 	    x -= dx;
 	    y -= dy;
 	}
 	while (x >= 0 && x < size && y >= 0 && y < size) {
 	    blocked[(size_t) x * n + (size_t) y] += (uint32_t) delta;
-	    x += dx;
-	    y += dy;
+	    x                                    += dx;
+	    y                                    += dy;
 	}
     }
 }
@@ -182,7 +177,7 @@ exact_search(size_t         n,
 	points[count] = candidate;
 	grid[cell]    = 1;
 	if (exact_search(n, grid_size, target, cell + 1, count + 1, grid,
-			 blocked, points)) {
+	                 blocked, points)) {
 	    return 1;
 	}
 	grid[cell] = 0;
@@ -306,7 +301,7 @@ main(int argc, char **argv)
 	    exact_search(n, grid_size, target, 0, 0, grid, blocked, points);
     } else {
 	result = randomized_search(n, grid_size, target, attempts, grid,
-				   blocked, points);
+	                           blocked, points);
     }
 
     if (result == 1) {
@@ -324,4 +319,3 @@ main(int argc, char **argv)
     free(points);
     return result == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
-
